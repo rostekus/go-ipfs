@@ -2,6 +2,7 @@ package ipfs
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -30,7 +31,8 @@ func (c *Client) Add(content string) (*http.Response, error) {
 
 	writer.Close()
 
-	req, err := http.NewRequest("POST", c.Url, body)
+	postUrls := fmt.Sprintf("%s%s", c.Url, "/api/v0/add?")
+	req, err := http.NewRequest("POST", postUrls, body)
 	if err != nil {
 		return &http.Response{}, nil
 	}
