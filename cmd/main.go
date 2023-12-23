@@ -1,44 +1,69 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 
 	_ "github.com/go-sql-driver/mysql"
+	shell "github.com/ipfs/go-ipfs-api"
 	"github.com/rostekus/ipfs-go/internal/db"
+	"github.com/rostekus/ipfs-go/internal/ipfs"
+	"github.com/rostekus/ipfs-go/internal/utils"
 )
 
-type TableInfo struct {
-	TableName string   `json:"tableName"`
-	Columns   []Column `json:"columns"`
-	Rows      []Row    `json:"rows"`
-}
-
-type Column struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-}
-
-type Row map[string]interface{}
-
 func main() {
-	// Connect to MySQL database
-	uri := "root:examplepassword@tcp(localhost:3306)/exampledb"
-	tableName := "users"
+	args := utils.GetArgs()
 
-	dbAnalyzer := db.New(uri)
+	fmt.Printf("analazying table %s\n", args.TableName)
+	dbAnalyzer := db.New(args.DBURI)
 	defer dbAnalyzer.Close()
 
-	// Create TableInfo struct
-	tableInfo := dbAnalyzer.GetTableinfo(tableName)
-	fmt.Print(tableInfo)
+	tableInfo := dbAnalyzer.GetTableinfo(args.TableName)
+	fmt.Printf("Table: %s\nColumns: %s\n", tableInfo.TableName, tableInfo.Columns)
 
-	// Convert to JSON
-	jsonData, err := json.Marshal(tableInfo)
+	fmt.Println("Calculating Hash...")
+	hashChain := utils.GenerateChainHash(tableInfo.Rows)
+	fmt.Printf("Hash Chain: %s\n", hashChain)
+
+	fmt.Printf("Obtaining CID, IPFS %s\n", args.IpfsAddress)
+	client := ipfs.Client{Url: args.IpfsAddress}
+	resp, err := client.Add(hashChain)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("couldn't obtained cid %s", err.Error())
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("cannot read resp from ipfs %s", err.Error())
+	}
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("couldn't obtained cid, response status %d", resp.StatusCode)
+	}
+	cidBody, err := ipfs.GetCIDResponse(string(body))
+	if err != nil {
+		log.Fatalf("cannot read resp from ipfs %s", err.Error())
+	}
+	fmt.Printf("Obtained CID %s\n", cidBody.Hash)
+
+	// ======= Using 3rd party library
+
+	keyS := utils.GenerateRandomKey()
+	fmt.Println("your key", keyS)
+	sh := shell.NewShell("localhost:5001")
+	key, err := sh.KeyGen(context.Background(), keyS)
+	if err != nil {
+		fmt.Println("Error creating key:", err)
+		return
 	}
 
-	fmt.Println(string(jsonData))
+	// Publish the CID to IPNS with the created key
+	ipnsHash, err := sh.PublishWithDetails(cidBody.Hash, key.Id, 0, 0, false)
+	if err != nil {
+		fmt.Println("Error publishing to IPNS:", err)
+		return
+	}
+
+	fmt.Printf("IPNS: %s of the content with cid: %s\n", ipnsHash.Name, ipnsHash.Value)
 }
