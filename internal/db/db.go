@@ -5,19 +5,6 @@ import (
 	"log"
 )
 
-type TableInfo struct {
-	TableName string   `json:"tableName"`
-	Columns   []Column `json:"columns"`
-	Rows      []Row    `json:"rows"`
-}
-
-type Column struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-}
-
-type Row map[string]interface{}
-
 type DBAnalyzer struct {
 	db *sql.DB
 }
@@ -43,13 +30,11 @@ func (db *DBAnalyzer) GetTableinfo(tableName string) *TableInfo {
 		log.Fatal(err)
 	}
 
-	// Get rows data
 	rowsData, err := db.getRows(tableName, columns)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Create TableInfo struct
 	tableInfo := TableInfo{
 		TableName: tableName,
 		Columns:   columns,
@@ -57,7 +42,6 @@ func (db *DBAnalyzer) GetTableinfo(tableName string) *TableInfo {
 	}
 
 	return &tableInfo
-	// Convert to JSON
 }
 
 func (db *DBAnalyzer) getColumns(tableName string) ([]Column, error) {
@@ -79,7 +63,6 @@ func (db *DBAnalyzer) getColumns(tableName string) ([]Column, error) {
 		column := Column{
 			Name: columnName.String,
 			Type: columnType.String,
-			// You might want to include other column properties like nullable, key, default, extra here
 		}
 
 		columns = append(columns, column)
@@ -100,7 +83,6 @@ func (db *DBAnalyzer) getRows(tableName string, columns []Column) ([]Row, error)
 	for rows.Next() {
 		row := make(Row)
 
-		// Create a slice of interface{} to hold the row values
 		values := make([]interface{}, len(columns))
 		valuePtrs := make([]interface{}, len(columns))
 
